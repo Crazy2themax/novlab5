@@ -1,6 +1,6 @@
 name: Build signed Android APK
 
-# 1. Trusted branch push or manual run
+# 1. Trusted branch push, version tag, or manual run
 on:
   push:
     branches: [main]
@@ -29,7 +29,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.1'
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
 
@@ -37,12 +37,6 @@ jobs:
         run: |
           flutter --version
           java -version
-      # 3. Install dependencies and check the project
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
 
       # 4. Restore signing files before any Gradle configuration
       - name: Prepare signing files
@@ -80,9 +74,17 @@ jobs:
             write_property keyAlias "$KEY_ALIAS"
           } > android/key.properties
 
+      # 3. Install dependencies and analyze the project
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
       # 5. Build with the signing configuration from Stage 2
       - name: Build signed release APK
         run: flutter build apk --release
+
       # 6. Upload only the APK, then remove private signing files
       - name: Read app version
         id: version
@@ -109,8 +111,8 @@ jobs:
           set -euo pipefail
           version=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '\r')
           case "$GITHUB_REF_NAME" in
-            v1.0.0) expected='1.0.0+1' ;;
-            v1.1.0) expected='1.1.0+2' ;;
+            v1.0.0) expected='1.0.0+1'; notes='Initial signed release of Tic-Tac-Toe.' ;;
+            v1.1.0) expected='1.1.0+2'; notes='Adds a Round counter that advances on each restart and updates the app title.' ;;
             *) echo 'Unsupported release tag'; exit 1 ;;
           esac
           if [ "$version" != "$expected" ]; then
@@ -122,9 +124,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "$apk" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes
-
-
+            --notes "$notes"
 
       - name: Remove signing files
         if: always()
